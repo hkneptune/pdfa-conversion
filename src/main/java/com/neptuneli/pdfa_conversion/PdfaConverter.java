@@ -1,30 +1,61 @@
 package com.neptuneli.pdfa_conversion;
 
 import java.io.*;
+import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Objects;
 
+import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentCatalog;
 import org.apache.pdfbox.pdmodel.PDDocumentInformation;
 import org.apache.pdfbox.pdmodel.common.PDMetadata;
 import org.apache.pdfbox.pdmodel.graphics.color.PDOutputIntent;
 
-public class PdfaConverter {
+/**
+ * PDF/A Converter
+ */
+public final class PdfaConverter {
 
   private static final float PDF_VERSION = 1.4f;
   private static final String PDF_PART = "1";
   private static final String PDF_CONFORMANCE = "A";
 
+  /**
+   * Hide implicit public constructor suggested by SonarLint
+   */
+  private PdfaConverter() {
+  }
+
+  /**
+   * Convert PDF to PDF/A
+   *
+   * @param inputFilePath  the input file path
+   * @param outputFilePath the output file path
+   * @throws PdfaException exception
+   */
   public static void convert(final String inputFilePath, final String outputFilePath)
-      throws Exception {
+      throws PdfaException {
     convert(inputFilePath, outputFilePath, PDF_VERSION, PDF_PART, PDF_CONFORMANCE);
   }
 
+  /**
+   * Convert PDF to PDF/A
+   *
+   * @param inputFilePath  the input file path
+   * @param outputFilePath the output file path
+   * @param pdfVersion     the PDF version
+   * @param pdfPart        the part
+   * @param pdfConformance the conformance
+   * @throws PdfaException exception
+   */
   public static void convert(
       final String inputFilePath, final String outputFilePath, final float pdfVersion,
-      final String pdfPart, final String pdfConformance) throws Exception {
+      final String pdfPart, final String pdfConformance) throws PdfaException {
 
     final File inputFile = new File(inputFilePath);
     final File outputFile = new File(outputFilePath);
@@ -33,12 +64,22 @@ public class PdfaConverter {
       throw new PdfaException("Input file does not exist");
     }
 
-    final byte[] inputContent = Files.readAllBytes(inputFile.getAbsoluteFile().toPath());
+    byte[] inputContent;
+
+    try {
+      inputContent = Files.readAllBytes(inputFile.getAbsoluteFile().toPath());
+    } catch (final IOException ioe) {
+      throw new PdfaException("Cannot read the input file content", ioe);
+    }
 
     final byte[] outputContent = convert(inputContent, pdfVersion, pdfPart, pdfConformance);
 
-    try (final FileOutputStream outputStream = new FileOutputStream(outputFile)) {
+    try (final OutputStream outputStream = Files.newOutputStream(outputFile.toPath())) {
       outputStream.write(outputContent);
+    } catch (final FileNotFoundException e) {
+      throw new PdfaException("Cannot find the output file", e);
+    } catch (final IOException ioe) {
+      throw new PdfaException("Cannot write to the output file", ioe);
     }
 
     if (!outputFile.exists()) {
@@ -46,32 +87,68 @@ public class PdfaConverter {
     }
   }
 
-  public static byte[] convert(final byte[] inputContent) throws Exception {
+  /**
+   * Convert PDF to PDF/A
+   *
+   * @param inputContent the input file content
+   * @return the output file content
+   * @throws PdfaException exception
+   */
+  public static byte[] convert(final byte[] inputContent) throws PdfaException {
     return convert(inputContent, PDF_VERSION, PDF_PART, PDF_CONFORMANCE);
   }
 
+  /**
+   * Convert PDF to PDF/A
+   *
+   * @param inputContent   the input file content
+   * @param pdfVersion     the PDF version
+   * @param pdfPart        the part
+   * @param pdfConformance the conformance
+   * @return the output file content
+   * @throws PdfaException exception
+   */
   public static byte[] convert(final byte[] inputContent, final float pdfVersion,
-      final String pdfPart, final String pdfConformance) throws Exception {
+      final String pdfPart, final String pdfConformance) throws PdfaException {
 
-    final File colorPFile = new File("src/main/resources/sRGB Color Space Profile.icm");
+    final InputStream colorSpaceProfileInputStream = PdfaConverter.class.getClassLoader()
+        .getResourceAsStream("sRGB Color Space Profile.icm");
 
     if (inputContent == null || inputContent.length == 0) {
       throw new PdfaException("Input file/content does not exist");
     }
 
-    final PDDocument doc = PDDocument.load(inputContent);
-    final PDDocumentCatalog catalog = setCompliant(doc, pdfPart, pdfConformance);
+    PDDocument doc;
+    try {
+      doc = PDDocument.load(inputContent);
+    } catch (final IOException ioe) {
+      throw new PdfaException("Cannot load the input file content", ioe);
+    }
 
-    try (final InputStream colorProfile = Files.newInputStream(colorPFile.toPath())) {
-      addOutputIntent(doc, catalog, colorProfile);
+    PDDocumentCatalog catalog;
+    try {
+      catalog = setCompliant(doc, pdfPart, pdfConformance);
+    } catch (final IOException ioe) {
+      throw new PdfaException("Cannot set compliant for the PDF", ioe);
+    }
+
+    try {
+      addOutputIntent(doc, catalog, colorSpaceProfileInputStream);
+    } catch (IOException e) {
+      throw new PdfaException("Cannot add output intent", e);
     }
 
     final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     doc.setVersion(pdfVersion);
-    doc.save(outputStream);
-    doc.close();
 
-    if (outputStream == null || outputStream.size() == 0) {
+    try {
+      doc.save(outputStream);
+      doc.close();
+    } catch (final IOException ioe) {
+      throw new PdfaException("Cannot save to the output file", ioe);
+    }
+
+    if (outputStream.size() == 0) {
       throw new PdfaException("Fail to create output file");
     }
 
@@ -85,19 +162,21 @@ public class PdfaConverter {
 
     if (catalog.getOutputIntents().isEmpty()) {
 
-      final PDOutputIntent oi = new PDOutputIntent(doc, colorProfile);
-      oi.setInfo(profile);
-      oi.setOutputCondition(profile);
-      oi.setOutputConditionIdentifier(profile);
-      oi.setRegistryName("http://www.color.org");
+      final PDOutputIntent outputIntent;
 
-      catalog.addOutputIntent(oi);
+      outputIntent = new PDOutputIntent(doc, colorProfile);
+      outputIntent.setInfo(profile);
+      outputIntent.setOutputCondition(profile);
+      outputIntent.setOutputConditionIdentifier(profile);
+      outputIntent.setRegistryName("http://www.color.org");
+
+      catalog.addOutputIntent(outputIntent);
     }
 
   }
 
   private static PDDocumentCatalog setCompliant(final PDDocument doc, final String pdfPart,
-      final String pdfConformance) throws IOException {
+      final String pdfConformance) throws IOException, PdfaException {
 
     final PDDocumentCatalog catalog = doc.getDocumentCatalog();
     final PDDocumentInformation info = doc.getDocumentInformation();
@@ -115,12 +194,19 @@ public class PdfaConverter {
 
     final Charset charset = StandardCharsets.UTF_8;
 
-    final byte[] fileBytes
-        = Files.readAllBytes(new File("src/main/resources/xmpTemplate.xml").toPath());
+    final InputStream is =
+        PdfaConverter.class.getClassLoader().getResourceAsStream("xmpTemplate.xml");
+    if (is == null) {
+      throw new PdfaException("Cannot load the xmp template");
+    }
+
+    final byte[] fileBytes = IOUtils.toByteArray(is);
 
     String content = new String(fileBytes, charset);
-    content = content.replaceAll("@#pdfaid:part#@", pdfPart);
-    content = content.replaceAll("@#pdfaid:conformance#@", pdfConformance);
+    content = content.replace("@#pdfaid:part#@", pdfPart);
+    content = content.replace("@#pdfaid:conformance#@", pdfConformance);
+
+    is.close();
 
     final byte[] editedBytes = content.getBytes(charset);
     metadata.importXMPMetadata(editedBytes);

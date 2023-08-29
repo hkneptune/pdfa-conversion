@@ -1,8 +1,22 @@
 package com.neptuneli.pdfa_conversion;
 
-public class PdfaApplication {
+/**
+ * The PDF Conversion Application
+ */
+public final class PdfaApplication {
 
-  public static void main(String[] args) {
+  /**
+   * Hide implicit public constructor suggested by SonarLint
+   */
+  private PdfaApplication() {
+  }
+
+  /**
+   * The main method
+   *
+   * @param args The parameters passing in
+   */
+  public static void main(final String[] args) {
 
     try {
 
@@ -10,9 +24,9 @@ public class PdfaApplication {
           "D:\\temp\\TestingDocument.pdf",
           "D:\\temp\\NewTestingDocument1.pdf");
 
-    } catch (final Exception e) {
+    } catch (final PdfaException e) {
 
-      e.printStackTrace(System.out);
+      System.out.println();
     }
   }
 }

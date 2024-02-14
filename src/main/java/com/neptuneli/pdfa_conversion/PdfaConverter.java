@@ -1,14 +1,11 @@
 package com.neptuneli.pdfa_conversion;
 
 import java.io.*;
-import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Objects;
 
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentCatalog;
@@ -120,7 +117,7 @@ public final class PdfaConverter {
 
     PDDocument doc;
     try {
-      doc = PDDocument.load(inputContent);
+      doc = Loader.loadPDF(inputContent);
     } catch (final IOException ioe) {
       throw new PdfaException("Cannot load the input file content", ioe);
     }

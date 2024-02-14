@@ -1,5 +1,10 @@
 package com.neptuneli.pdfa_conversion;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.logging.Logger;
+
 /**
  * The PDF Conversion Application
  */
@@ -9,6 +14,7 @@ public final class PdfaApplication {
    * Hide implicit public constructor suggested by SonarLint
    */
   private PdfaApplication() {
+
   }
 
   /**
@@ -18,15 +24,19 @@ public final class PdfaApplication {
    */
   public static void main(final String[] args) {
 
-    try {
+    final Path inputPath = Paths.get("D:\\temp\\TestingDocument.pdf");
+    final Path outputPath = Paths.get("D:\\temp\\NewTestingDocument.pdf");
 
-      PdfaConverter.convert(
-          "D:\\temp\\TestingDocument.pdf",
-          "D:\\temp\\NewTestingDocument1.pdf");
+    if (Files.exists(inputPath)) {
+      try {
 
-    } catch (final PdfaException e) {
+        PdfaConverter.convert(inputPath.toFile().getPath(), outputPath.toFile().getPath());
 
-      System.out.println();
+      } catch (final PdfaException e) {
+
+        final Logger logger = Logger.getLogger(PdfaApplication.class.getName());
+        logger.info("Failed to convert the PDF file");
+      }
     }
   }
 }

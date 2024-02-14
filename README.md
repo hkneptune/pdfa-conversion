@@ -19,12 +19,12 @@ byte[] result = PdfaConverter.convert(byte[] inputContent, float pdfVersion, Str
 <dependency>
 	<groupId>org.apache.pdfbox</groupId>
 	<artifactId>pdfbox</artifactId>
-	<version>2.0.29</version>
+	<version>3.0.1</version>
 </dependency>
 <dependency>
 	<groupId>com.neptuneli</groupId>
 	<artifactId>pdfa-conversion</artifactId>
-	<version>1.0.1</version>
+	<version>1.1.0</version>
 </dependency>
 ```
 
